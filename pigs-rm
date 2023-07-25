@@ -1,0 +1,153 @@
+#!/bin/dash
+
+if ! [ -d ".pig" ]; then
+  # Checks if .pig repo exist
+  echo "pigs-rm: error: pigs repository directory .pig not found"
+  exit 1
+fi
+
+check_exist_in_pig_repo() {
+  # Checks if file exist in Directory and in .pig/index
+  if ! [ -e ".pig/index/$1" ] 2>/dev/null; then
+    echo "false"; return
+  fi
+  echo "true"; return
+}
+
+check_staged() {
+  # Checks if fil ewas staged
+  commit_number=$(ls .pig/commit-log | wc -l)
+  last_commit_number=$((commit_number - 1))
+
+  if ! [ -e ".pig/commit-files/${last_commit_number}/$1" ] 2>/dev/null; then
+    # Check Files didn't exist in last commit
+    echo "true"; return
+  fi 
+  commit_number=$(ls .pig/commit-log | wc -l)
+  last_commit_number=$((commit_number - 1))
+  diff_output_1=$(diff "$1" ".pig/index/$1") 
+  diff_output_2=$(diff ".pig/commit-files/${last_commit_number}/$1" "$1")
+  if [ -z "$diff_output_1" ] && [ -n "$diff_output_2" ]; then
+    # checks if file is staged
+    echo "true"; return
+  fi
+  echo "false"; return
+}
+
+check_different_working_repo() {
+  # Precondition: passed check_staged
+  # Checks if the file in the last commit is different, and user tries to remove
+  commit_number=$(ls .pig/commit-log | wc -l)
+  last_commit_number=$((commit_number - 1))
+  diff_output_1=$(diff ".pig/commit-files/${last_commit_number}/$1" ".pig/index/$1")
+  diff_output_2=$(diff ".pig/index/$1" "$1")
+  if [ -z "$diff_output_1" ] && [ -n "$diff_output_2" ] 2>/dev/null; then
+    echo "true"; return
+  fi
+  echo "false"; return
+}
+
+check_different_index_repo_dir() {
+  # Precondition: passed check_staged
+  # Cehcks if file in .pig/index is different from main directory
+  commit_number=$(ls .pig/commit-log | wc -l)
+  last_commit_number=$((commit_number - 1))
+
+  if ! [ -e ".pig/commit-files/${last_commit_number}/$1" ] 2>/dev/null; then
+    # Check Files didn't exist in last commit
+    echo "false"; return
+  fi 
+  diff_output_1=$(diff ".pig/commit-files/${last_commit_number}/$1" ".pig/index/$1")
+  diff_output_2=$(diff ".pig/index/$1" "$1")
+  if [ -n "$diff_output_1" ] && [ -n "$diff_output_2" ]; then
+    # Checks if there are any changes
+    echo "true"; return
+  fi
+  echo "false"; return
+}
+
+if [ "$1" = "--force" ] && [ "$2" = "--cached" ]; then
+  # remove all files even if there was staged changes
+  for file_to_remove in "$@"; do
+    if [ "$file_to_remove" = "--force" ] || [ "$file_to_remove" = "--cached" ]; then
+      continue
+    fi
+    if ! [ -e ".pig/index/${file_to_remove}" ]; then
+      echo "pigs-rm: error: '${file_to_remove}' is not in the pigs repository"
+      echo "wow im here"
+      exit 1
+    fi
+    rm ".pig/index/${file_to_remove}"
+  done
+  exit 1
+fi
+
+if [ "$1" = "--cached" ]; then
+  # Remove file only in index
+  for file_to_remove in "$@"; do
+    if [ "$file_to_remove" = "--cached" ]; then
+      continue
+    fi
+    if [ "$(check_exist_in_pig_repo "$file_to_remove")" = "false" ]; then 
+      echo "pigs-rm: error: '${file_to_remove}' is not in the pigs repository"
+      exit 1
+    fi
+    if [ "$(check_different_index_repo_dir "$file_to_remove")" = "true" ]; then
+      echo "pigs-rm: error: '${file_to_remove}' in index is different to both the working file and the repository"
+      exit 1
+    fi
+    rm ".pig/index/${file_to_remove}"
+  done
+  exit 1
+fi
+
+if [ "$1" = "--force" ]; then
+  # remove all even if there was staged changes
+  for file_to_remove in "$@"; do
+    if [ "$file_to_remove" = "--force" ]; then
+      continue
+    fi
+    if ! [ -e ".pig/index/${file_to_remove}" ]; then
+      echo "pigs-rm: error: '${file_to_remove}' is not in the pigs repository"
+      exit 1
+    fi
+    if [ -e "$file_to_remove" ]; then
+      rm "$file_to_remove"
+    fi
+    rm ".pig/index/${file_to_remove}"
+  done
+  exit 1
+fi
+
+# NORMAL REMOVE
+if ! [ "$1" = "--force" ] && ! [ "$1" = "--cached" ]; then
+  # pigs-remove [filename]
+  for file_to_remove in "$@"; do
+
+    if [ "$(check_exist_in_pig_repo "$file_to_remove")" = "false" ]; then 
+      # Check if file in pig repo
+      echo "pigs-rm: error: '${file_to_remove}' is not in the pigs repository"
+      exit 1
+    fi
+    if [ "$(check_staged "$file_to_remove")" = "true" ]; then
+      # Check if file staged
+      echo "pigs-rm: error: '${file_to_remove}' has staged changes in the index"
+      exit 1
+    fi
+    if [ "$(check_different_working_repo "$file_to_remove")" = "true" ]; then
+      # Check any changes in repository 
+      echo "pigs-rm: error: '${file_to_remove}' in the repository is different to the working file"
+      exit 1
+    fi
+    if [ "$(check_different_index_repo_dir "$file_to_remove")" = "true" ]; then
+      # Check any changes in .pig/index and curr directory
+      echo "pigs-rm: error: '${file_to_remove}' in index is different to both the working file and the repository"
+      exit 1
+    fi
+    # IF exist in dir , also remove it. but main one is in index
+    if [ -e "$file_to_remove" ]; then
+      rm "$file_to_remove"
+    fi
+    rm ".pig/index/${file_to_remove}"
+  done
+fi

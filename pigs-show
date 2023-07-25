@@ -1,0 +1,82 @@
+#!/bin/dash
+
+# format ./pigs-show [commit_number]:[file_name]
+# Example : ./pigs-show 3:Dictionary
+# This show a file called Dictionary when it was the third commit
+
+
+if ! [ -d ".pig" ]; then
+  # Checks if .pig repo exist
+  echo "pigs-show: error: pigs repository directory .pig not found"
+  exit 1
+fi
+
+if ! [ "$#" = 1 ]; then
+  # Checks if the number of input follows the format
+  echo "usage: pigs-show <commit>:<filename>"
+  exit 1
+fi
+
+
+input="$1"
+# Check if it has ":"
+contain_colon=$(echo "$input" | grep -o ":")
+if ! [ "$contain_colon" = ":" ]; then
+  echo "pigs-show: error: invalid object ${input}"
+  exit 1
+fi
+
+# Gets the number and file from  input  
+# Example ./pigs-show 3:a will get 3 as the commit number
+#   and will get a as the file to be shown
+commit_number=$(echo "$input" | cut -f1 -d ':')
+file_to_show=$(echo "$input" | cut -f2 -d ':')
+show_most_recent_file=true
+# Check if Commit number is valid
+if [ -n "$commit_number" ]; then
+  # If there is a commit_number
+  show_most_recent_file=false
+  commit_is_number=$(echo "$commit_number" | grep -E -o "(^[1-9][0-9]*$)|0")
+  if [ -z "$commit_is_number" ]; then
+    echo "pigs-show: error: unknown commit '${commit_number}'"
+    exit 1
+  fi
+fi
+
+# Case ./pigs-show :file-name
+if $show_most_recent_file; then
+  index_folder=$(ls ".pig/index" | grep -E "$file_to_show")
+  if [ -z "$index_folder" ]; then
+    # Check File exist
+    echo "pigs-show: error: '${file_to_show}' not found in index"
+    exit 1
+  fi
+  if ! [ -e ".pig/index/$file_to_show" ]; then
+    # Check File exist
+    echo "pigs-show: error: '${file_to_show}' not found in index"
+    exit 1
+  fi
+else 
+  # Case ./pigs-show num:file-name
+
+  # Checks Directory: .pig/commit-files/commit_number exist
+  if ! [ -d ".pig/commit-files/${commit_number}" ]; then
+    # Check commit_number exist
+    echo "pigs-show: error: unknown commit '${commit_number}'"
+    exit 1
+  fi
+  index_folder_file=$(ls ".pig/commit-files/${commit_number}") 2>/dev/null
+  index_folder=$(echo "$index_folder_file" | grep -E "$file_to_show")
+  if [ -z "$index_folder" ]; then
+    # Check file exist
+    echo "pigs-show: error: '${file_to_show}' not found in commit ${commit_number}"
+    exit 1
+  fi
+fi
+
+# Prints the file requested on input
+if $show_most_recent_file; then
+  cat "./.pig/index/${file_to_show}"
+else 
+  cat "./.pig/commit-files/${commit_number}/${file_to_show}"
+fi

@@ -1,0 +1,15 @@
+#!/bin/dash
+
+if [ -d ".pig" ]; then
+  # Checks if .pig repo exist
+  echo "pigs-init: error: .pig already exists"
+  exit 1
+fi
+# Creates main directory, index , commit logs directory, and commit-files
+# commit-log stores the commit messages and the number of commits
+# commit-files stores the files on every commit
+mkdir .pig
+mkdir .pig/index
+mkdir .pig/commit-log 
+mkdir .pig/commit-files  
+echo "Initialized empty pigs repository in .pig"

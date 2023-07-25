@@ -1,0 +1,14 @@
+#!/bin/dash
+
+if ! [ -d ".pig" ]; then
+  # Checks if .pig repo exist
+  echo "pigs-log: error: pigs repository directory .pig not found"
+  exit 1
+fi
+
+for file in $(ls .pig/commit-log | sort -rn); do
+  # Prints the number of commit followed by the  commit message
+  commit_number=$(echo "$file" | cut -f2 -d "_")
+  message=$(cat ".pig/commit-log/${file}")
+  echo "${commit_number} ${message}"
+done

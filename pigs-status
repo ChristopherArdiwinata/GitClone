@@ -1,0 +1,130 @@
+#!/bin/dash
+
+if ! [ -d ".pig" ]; then
+  # Checks if .pig repo exist
+  echo "pigs-status: error: pigs repository directory .pig not found"
+  exit 1
+fi
+
+exist_in_dir() {
+  # checks if file exist in directory
+  if [ -e "$1" ]; then
+    echo "true"; return
+  fi
+  echo "false"; return
+}
+
+exist_in_index() {
+  # checks if file exist in index
+  if [ -e ".pig/index/$1" ]; then
+    echo "true"; return
+  fi
+  echo "false"; return
+}
+
+exist_in_commit_repo() {
+  # checks if file exist in repo
+  commit_number=$(ls .pig/commit-log | wc -l)
+  last_commit_number=$((commit_number - 1))
+  if [ -e ".pig/commit-files/${last_commit_number}/$1" ]; then
+    echo "true"; return
+  fi
+  echo "false"; return
+}
+
+changed_dir_index() {
+  # checks if there were changed from file in directory and file in index
+  diff_output_1=$(diff "$1" ".pig/index/$1") 
+  if [ -n "$diff_output_1" ]; then
+    echo "true"; return
+  fi
+  echo "false"; return
+}
+
+changed_dir_commit_repo() {
+  # checks if there were changed from file in directory and file in las commited repo
+  commit_number=$(ls .pig/commit-log | wc -l)
+  last_commit_number=$((commit_number - 1))
+  diff_output_1=$(diff ".pig/commit-files/${last_commit_number}/$1" "$1")
+  if [ -n "$diff_output_1" ]; then
+    echo "true"; return
+  fi
+  echo "false"; return
+}
+
+changed_index_commit_repo() {
+  # checks if there were changed from file in last commited repo and file in index
+  commit_number=$(ls .pig/commit-log | wc -l)
+  last_commit_number=$((commit_number - 1))
+  diff_output_1=$(diff ".pig/commit-files/${last_commit_number}/$1" ".pig/index/$1")
+  if [ -n "$diff_output_1" ]; then
+    echo "true"; return
+  fi
+  echo "false"; return
+}
+
+for file in $(ls .pig/index); do
+  #Loop through index and prints anything that has changed 
+  in_dir=$(exist_in_dir "$file")
+  in_index=$(exist_in_index "$file")
+  in_commit_repo=$(exist_in_commit_repo "$file")
+
+  if [ "$in_dir" = "true" ] && [ "$in_index" = "true" ] && [ "$in_commit_repo" = "true" ]; then
+    is_changed_dir_index=$(changed_dir_index "$file")
+    is_changed_dir_commit_repo=$(changed_dir_commit_repo "$file")
+    is_changed_index_commit_repo=$(changed_index_commit_repo "$file")
+    if [ "$is_changed_dir_index" = "true" ] && [ "$is_changed_dir_commit_repo" = "true" ] && [ "$is_changed_index_commit_repo" = "true" ]; then
+      echo "${file} - file changed, different changes staged for commit"
+    elif [ "$is_changed_dir_index" = "false" ] && [  "$is_changed_dir_commit_repo" = "true" ]; then
+      echo "${file} - file changed, changes staged for commit"
+    elif [ "$is_changed_dir_index" = "true" ] && [  "$is_changed_index_commit_repo" = "false" ]; then
+      echo "${file} - file changed, changes not staged for commit"
+    fi
+  fi
+done 
+
+commit_number=$(ls .pig/commit-log | wc -l)
+last_commit_number=$((commit_number - 1))
+
+for file in $(ls .pig/commit-files/${last_commit_number}); do
+  #Loop through last commited files prints anything 
+  # that was deleted or unchanged
+  in_dir=$(exist_in_dir "$file")
+  in_index=$(exist_in_index "$file")
+  in_commit_repo=$(exist_in_commit_repo "$file")
+
+  if [ "$in_dir" = "false" ] && [ "$in_index" = "true" ] && [ "$in_commit_repo" = "true" ]; then
+    is_changed_index_commit_repo=$(changed_index_commit_repo "$file")
+    if [ "$is_changed_index_commit_repo" = "false" ]; then
+      echo "${file} - file deleted"
+    fi
+  elif [ "$in_dir" = "false" ] && [ "$in_index" = "false" ] && [ "$in_commit_repo" = "true" ]; then
+    echo "${file} - file deleted, deleted from index"
+  elif [ "$in_dir" = "true" ] && [ "$in_index" = "true" ] && [ "$in_commit_repo" = "true" ]; then
+    is_changed_dir_index=$(changed_dir_index "$file")
+    is_changed_dir_commit_repo=$(changed_dir_commit_repo "$file")
+    is_changed_index_commit_repo=$(changed_index_commit_repo "$file")
+    if [ "$is_changed_dir_index" = "false" ] && [ "$is_changed_dir_commit_repo" = "false" ] && [ "$is_changed_index_commit_repo" = "false" ]; then
+      echo "${file} - same as repo"
+    fi
+  fi
+done
+
+for file in $(ls); do
+  #loop directory prints anything that was deleted from index, untracked or added
+  in_dir=$(exist_in_dir "$file")
+  in_index=$(exist_in_index "$file")
+  in_commit_repo=$(exist_in_commit_repo "$file")
+
+  if [ "$in_dir" = "true" ] && [ "$in_index" = "false" ] && [ "$in_commit_repo" = "false" ]; then
+    echo "${file} - untracked"
+  fi
+
+  if [ "$in_dir" = "true" ] && [ "$in_index" = "true" ] && [ "$in_commit_repo" = "false" ]; then
+    echo "${file} - added to index"
+  fi
+
+  if [ "$in_dir" = "true" ] && [ "$in_index" = "false" ] && [ "$in_commit_repo" = "true" ]; then
+    echo "${file} - deleted from index"
+  fi
+done

@@ -1,0 +1,36 @@
+#!/bin/dash
+
+pigs_add() {
+  # Adds file to .pig/index/
+  for file in "$@"
+  do
+    if ! [ -e "$file" ]; then
+      if [ "$(file_was_removed "${file}")" = "true" ]; then
+        # Check if file was recently removed
+        rm ".pig/index/$file" 
+        continue
+      fi
+      echo "pigs-add: error: can not open 'non_existent_file'"
+      continue
+    fi
+    cp "$file" ".pig/index/$file"
+  done
+}
+
+file_was_removed() {
+  # Checks if the last action was removing a file
+  if ! [ -e ".pig/index/$1" ]; then
+    # Check in index if there was the file
+    echo "false"; return 
+  fi
+  # The file was removed
+  echo "true"; return 
+}
+
+if ! [ -d ".pig" ]; then
+  # Checks if .pig repo exist
+  echo "pigs-add: error: pigs repository directory .pig not found"
+  exit 1
+fi
+
+pigs_add "$@"
